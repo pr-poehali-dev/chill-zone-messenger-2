@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { api, User } from '@/lib/api';
-import AuthPage from '@/components/AuthPage';
 import ChatPage from '@/components/ChatPage';
 import ProfileSheet from '@/components/ProfileSheet';
 
@@ -14,34 +13,41 @@ export default function Index() {
     const saved = localStorage.getItem('cz_theme');
     const dark = saved !== null ? saved === 'dark' : true;
     setIsDark(dark);
-    if (dark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', dark);
   }, []);
 
   useEffect(() => {
     const session = localStorage.getItem('cz_session');
-    if (!session) { setLoading(false); return; }
 
-    api.auth.me().then(res => {
-      if (res.ok) setUser(res.data.user);
-      else localStorage.removeItem('cz_session');
-      setLoading(false);
-    });
+    if (session) {
+      api.auth.me().then(res => {
+        if (res.ok) {
+          setUser(res.data.user);
+          setLoading(false);
+        } else {
+          localStorage.removeItem('cz_session');
+          createGuest();
+        }
+      });
+    } else {
+      createGuest();
+    }
   }, []);
+
+  async function createGuest() {
+    const res = await api.auth.guest();
+    if (res.ok) {
+      localStorage.setItem('cz_session', res.data.session_id);
+      setUser(res.data.user);
+    }
+    setLoading(false);
+  }
 
   function toggleTheme() {
     const next = !isDark;
     setIsDark(next);
     localStorage.setItem('cz_theme', next ? 'dark' : 'light');
-    if (next) document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
-  }
-
-  function handleLogin(u: User, _sessionId: string) {
-    setUser(u);
+    document.documentElement.classList.toggle('dark', next);
   }
 
   function handleLogout() {
@@ -49,9 +55,10 @@ export default function Index() {
     localStorage.removeItem('cz_session');
     setUser(null);
     setProfileOpen(false);
+    createGuest();
   }
 
-  if (loading) {
+  if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -62,10 +69,6 @@ export default function Index() {
         </div>
       </div>
     );
-  }
-
-  if (!user) {
-    return <AuthPage onLogin={handleLogin} />;
   }
 
   return (

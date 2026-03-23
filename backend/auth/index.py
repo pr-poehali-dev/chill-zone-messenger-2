@@ -29,6 +29,29 @@ def handler(event: dict, context) -> dict:
     cur = conn.cursor()
 
     try:
+        # POST /guest — автоматический вход без имени и кода
+        if method == 'POST' and path.endswith('/guest'):
+            import random
+            num = random.randint(1000, 9999)
+            display_name = f'Гость{num}'
+            username = f'guest_{num}_{secrets.token_hex(4)}'
+
+            cur.execute(
+                "INSERT INTO users (username, password_hash, display_name) VALUES (%s, %s, %s) RETURNING id",
+                (username, '', display_name)
+            )
+            user_id = cur.fetchone()[0]
+            token = secrets.token_hex(32)
+            cur.execute("INSERT INTO sessions (id, user_id) VALUES (%s, %s)", (token, user_id))
+            cur.execute("UPDATE users SET last_seen = NOW() WHERE id = %s", (user_id,))
+            conn.commit()
+
+            return {
+                'statusCode': 200,
+                'headers': CORS_HEADERS,
+                'body': json.dumps({'session_id': token, 'user': {'id': user_id, 'username': username, 'display_name': display_name, 'is_verified': False, 'is_admin': False, 'avatar_url': None}})
+            }
+
         # POST /enter — вход или авторегистрация по имени + коду
         if method == 'POST' and (path.endswith('/enter') or path.endswith('/login') or path.endswith('/register')):
             display_name = body.get('display_name', '').strip()
