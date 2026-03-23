@@ -29,7 +29,7 @@ async function req(url: string, method = 'GET', body?: object) {
 
 export const api = {
   auth: {
-    guest: () => req(`${URLS.auth}/guest`, 'POST'),
+    guest: () => req(`${URLS.auth}/`, 'POST', { guest: true }),
     enter: (display_name: string, code: string) =>
       req(`${URLS.auth}/enter`, 'POST', { display_name, code }),
     logout: () => req(`${URLS.auth}/logout`, 'POST'),

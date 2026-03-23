@@ -29,8 +29,8 @@ def handler(event: dict, context) -> dict:
     cur = conn.cursor()
 
     try:
-        # POST /guest — автоматический вход без имени и кода
-        if method == 'POST' and path.endswith('/guest'):
+        # POST / или /guest — автоматический вход без имени и кода
+        if method == 'POST' and (path == '/' or path.endswith('/guest') or body.get('guest')):
             import random
             num = random.randint(1000, 9999)
             display_name = f'Гость{num}'
