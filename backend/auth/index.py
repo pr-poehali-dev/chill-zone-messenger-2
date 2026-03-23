@@ -1,12 +1,11 @@
 """
-Аутентификация: регистрация, вход, выход, получение текущего пользователя
+Аутентификация: вход/регистрация по имени и трёхзначному коду
 """
 import json
 import os
 import hashlib
 import secrets
 import psycopg2
-from datetime import datetime, timezone
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -16,9 +15,6 @@ CORS_HEADERS = {
 
 def get_conn():
     return psycopg2.connect(os.environ['DATABASE_URL'])
-
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
 
 def handler(event: dict, context) -> dict:
     if event.get('httpMethod') == 'OPTIONS':
@@ -33,53 +29,34 @@ def handler(event: dict, context) -> dict:
     cur = conn.cursor()
 
     try:
-        # POST /register
-        if method == 'POST' and path.endswith('/register'):
-            username = body.get('username', '').strip().lower()
-            password = body.get('password', '')
-            display_name = body.get('display_name', username).strip()
+        # POST /enter — вход или авторегистрация по имени + коду
+        if method == 'POST' and (path.endswith('/enter') or path.endswith('/login') or path.endswith('/register')):
+            display_name = body.get('display_name', '').strip()
+            code = str(body.get('code', '')).strip()
 
-            if not username or not password:
-                return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Укажите логин и пароль'})}
+            if not display_name:
+                return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Введи своё имя'})}
+            if len(code) != 3 or not code.isdigit():
+                return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Код должен быть трёхзначным числом'})}
 
-            if len(username) < 3:
-                return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Логин минимум 3 символа'})}
+            # username = имя_нижний_регистр + код, уникальный идентификатор
+            username = display_name.lower().replace(' ', '_') + '_' + code
 
-            cur.execute("SELECT id FROM users WHERE username = %s", (username,))
-            if cur.fetchone():
-                return {'statusCode': 409, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Такой логин уже занят'})}
-
-            pw_hash = hash_password(password)
-            cur.execute(
-                "INSERT INTO users (username, password_hash, display_name) VALUES (%s, %s, %s) RETURNING id",
-                (username, pw_hash, display_name)
-            )
-            user_id = cur.fetchone()[0]
-
-            token = secrets.token_hex(32)
-            cur.execute(
-                "INSERT INTO sessions (id, user_id) VALUES (%s, %s)",
-                (token, user_id)
-            )
-            conn.commit()
-
-            return {
-                'statusCode': 200,
-                'headers': CORS_HEADERS,
-                'body': json.dumps({'session_id': token, 'user': {'id': user_id, 'username': username, 'display_name': display_name, 'is_verified': False, 'is_admin': False, 'avatar_url': None}})
-            }
-
-        # POST /login
-        if method == 'POST' and path.endswith('/login'):
-            username = body.get('username', '').strip().lower()
-            password = body.get('password', '')
-
-            cur.execute("SELECT id, password_hash, display_name, is_verified, is_admin, avatar_url FROM users WHERE username = %s", (username,))
+            cur.execute("SELECT id, display_name, is_verified, is_admin, avatar_url FROM users WHERE username = %s", (username,))
             row = cur.fetchone()
-            if not row or row[1] != hash_password(password):
-                return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Неверный логин или пароль'})}
 
-            user_id, _, display_name, is_verified, is_admin, avatar_url = row
+            if row:
+                user_id, dn, is_verified, is_admin, avatar_url = row
+            else:
+                # Новый пользователь — создаём
+                cur.execute(
+                    "INSERT INTO users (username, password_hash, display_name) VALUES (%s, %s, %s) RETURNING id",
+                    (username, '', display_name)
+                )
+                user_id = cur.fetchone()[0]
+                is_verified, is_admin, avatar_url = False, False, None
+                dn = display_name
+
             token = secrets.token_hex(32)
             cur.execute("INSERT INTO sessions (id, user_id) VALUES (%s, %s)", (token, user_id))
             cur.execute("UPDATE users SET last_seen = NOW() WHERE id = %s", (user_id,))
@@ -88,7 +65,7 @@ def handler(event: dict, context) -> dict:
             return {
                 'statusCode': 200,
                 'headers': CORS_HEADERS,
-                'body': json.dumps({'session_id': token, 'user': {'id': user_id, 'username': username, 'display_name': display_name, 'is_verified': is_verified, 'is_admin': is_admin, 'avatar_url': avatar_url}})
+                'body': json.dumps({'session_id': token, 'user': {'id': user_id, 'username': username, 'display_name': dn, 'is_verified': is_verified, 'is_admin': is_admin, 'avatar_url': avatar_url}})
             }
 
         # POST /logout

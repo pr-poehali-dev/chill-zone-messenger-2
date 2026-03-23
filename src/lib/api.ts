@@ -29,10 +29,8 @@ async function req(url: string, method = 'GET', body?: object) {
 
 export const api = {
   auth: {
-    register: (username: string, password: string, display_name: string) =>
-      req(`${URLS.auth}/register`, 'POST', { username, password, display_name }),
-    login: (username: string, password: string) =>
-      req(`${URLS.auth}/login`, 'POST', { username, password }),
+    enter: (display_name: string, code: string) =>
+      req(`${URLS.auth}/enter`, 'POST', { display_name, code }),
     logout: () => req(`${URLS.auth}/logout`, 'POST'),
     me: () => req(`${URLS.auth}/me`, 'GET'),
   },
