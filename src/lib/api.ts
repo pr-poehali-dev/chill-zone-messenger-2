@@ -32,8 +32,8 @@ export const api = {
     guest: () => req(`${URLS.auth}/`, 'POST', { guest: true }),
     enter: (display_name: string, code: string) =>
       req(`${URLS.auth}/enter`, 'POST', { display_name, code }),
-    logout: () => req(`${URLS.auth}/logout`, 'POST'),
-    me: () => req(`${URLS.auth}/me`, 'GET'),
+    logout: () => req(`${URLS.auth}/`, 'POST', { action: 'logout' }),
+    me: () => req(`${URLS.auth}/`, 'GET'),
   },
   messages: {
     list: (limit = 50, before_id?: number) => {
@@ -44,18 +44,18 @@ export const api = {
     send: (content: string, file_url?: string, file_type?: string, file_name?: string) =>
       req(`${URLS.messages}/`, 'POST', { content, file_url, file_type, file_name }),
     delete: (message_id: number) =>
-      req(`${URLS.messages}/delete`, 'POST', { message_id }),
+      req(`${URLS.messages}/`, 'POST', { action: 'delete', message_id }),
   },
   profile: {
-    users: () => req(`${URLS.profile}/users`),
+    users: () => req(`${URLS.profile}/`),
     update: (display_name: string) =>
-      req(`${URLS.profile}/update`, 'PUT', { display_name }),
+      req(`${URLS.profile}/`, 'POST', { action: 'update', display_name }),
     uploadAvatar: (image_data: string, content_type: string) =>
-      req(`${URLS.profile}/avatar`, 'POST', { image_data, content_type }),
+      req(`${URLS.profile}/`, 'POST', { action: 'avatar', image_data, content_type }),
     verify: (user_id: number, verified: boolean) =>
-      req(`${URLS.profile}/verify`, 'POST', { user_id, verified }),
+      req(`${URLS.profile}/`, 'POST', { action: 'verify', user_id, verified }),
     makeAdmin: (user_id: number, is_admin: boolean) =>
-      req(`${URLS.profile}/make-admin`, 'POST', { user_id, is_admin }),
+      req(`${URLS.profile}/`, 'POST', { action: 'make-admin', user_id, is_admin }),
   },
   upload: {
     file: (file_data: string, content_type: string, file_name: string) =>

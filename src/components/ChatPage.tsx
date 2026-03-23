@@ -137,7 +137,7 @@ export default function ChatPage({ user, onOpenProfile, onLogout, isDark, onTogg
         if (!initial && lastMsgIdRef.current > 0 && newLastId > lastMsgIdRef.current) {
           const newMsgs = msgs.filter(m => m.id > lastMsgIdRef.current && m.user.id !== user.id);
           newMsgs.forEach(m => {
-            if (notifPermRef.current) {
+            if (notifPermRef.current && typeof Notification !== 'undefined') {
               new Notification(`${m.user.display_name}`, { body: m.content || '📎 Файл', icon: m.user.avatar_url || undefined });
             }
           });
@@ -156,10 +156,12 @@ export default function ChatPage({ user, onOpenProfile, onLogout, isDark, onTogg
   }, []);
 
   useEffect(() => {
-    if (Notification.permission === 'granted') {
-      notifPermRef.current = true;
-    } else if (Notification.permission === 'default') {
-      Notification.requestPermission().then(p => { notifPermRef.current = p === 'granted'; });
+    if (typeof Notification !== 'undefined') {
+      if (Notification.permission === 'granted') {
+        notifPermRef.current = true;
+      } else if (Notification.permission === 'default') {
+        Notification.requestPermission().then(p => { notifPermRef.current = p === 'granted'; });
+      }
     }
 
     loadMessages(true);

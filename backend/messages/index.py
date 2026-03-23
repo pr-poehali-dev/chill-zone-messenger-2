@@ -32,10 +32,10 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': ''}
 
     method = event.get('httpMethod', 'GET')
-    path = event.get('path', '/')
     session_id = event.get('headers', {}).get('x-session-id', '')
     body = json.loads(event.get('body') or '{}')
     params = event.get('queryStringParameters') or {}
+    action = body.get('action', '')
 
     conn = get_conn()
     cur = conn.cursor()
@@ -68,30 +68,30 @@ def handler(event: dict, context) -> dict:
             messages = []
             for r in rows:
                 messages.append({
-                    'id': r[0],
-                    'content': r[1],
-                    'file_url': r[2],
-                    'file_type': r[3],
-                    'file_name': r[4],
+                    'id': r[0], 'content': r[1], 'file_url': r[2], 'file_type': r[3], 'file_name': r[4],
                     'created_at': r[5].isoformat() if r[5] else None,
-                    'user': {
-                        'id': r[6],
-                        'username': r[7],
-                        'display_name': r[8],
-                        'is_verified': r[9],
-                        'avatar_url': r[10]
-                    }
+                    'user': {'id': r[6], 'username': r[7], 'display_name': r[8], 'is_verified': r[9], 'avatar_url': r[10]}
                 })
             messages.reverse()
-
             return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'messages': messages})}
 
-        # POST / — отправить сообщение
-        if method == 'POST' and not path.endswith('/delete'):
+        if method == 'POST':
+            # Удалить сообщение (только admin)
+            if action == 'delete':
+                if not user or not user['is_admin']:
+                    return {'statusCode': 403, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Нет прав'})}
+                msg_id = body.get('message_id')
+                cur.execute("UPDATE messages SET content = NULL, file_url = NULL WHERE id = %s", (msg_id,))
+                conn.commit()
+                return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'ok': True})}
+
+            # Отправить сообщение
             if not user:
                 return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Не авторизован'})}
 
-            content = body.get('content', '').strip()
+            content = body.get('content', '')
+            if content:
+                content = content.strip()
             file_url = body.get('file_url')
             file_type = body.get('file_type')
             file_name = body.get('file_name')
@@ -106,37 +106,13 @@ def handler(event: dict, context) -> dict:
             msg_id, created_at = cur.fetchone()
             conn.commit()
 
-            return {
-                'statusCode': 200,
-                'headers': CORS_HEADERS,
-                'body': json.dumps({
-                    'message': {
-                        'id': msg_id,
-                        'content': content,
-                        'file_url': file_url,
-                        'file_type': file_type,
-                        'file_name': file_name,
-                        'created_at': created_at.isoformat(),
-                        'user': {
-                            'id': user['id'],
-                            'username': user['username'],
-                            'display_name': user['display_name'],
-                            'is_verified': user['is_verified'],
-                            'avatar_url': user['avatar_url']
-                        }
-                    }
-                })
-            }
-
-        # POST /delete — удалить сообщение (только admin)
-        if method == 'POST' and path.endswith('/delete'):
-            if not user or not user['is_admin']:
-                return {'statusCode': 403, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Нет прав'})}
-
-            msg_id = body.get('message_id')
-            cur.execute("UPDATE messages SET content = NULL, file_url = NULL WHERE id = %s", (msg_id,))
-            conn.commit()
-            return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'ok': True})}
+            return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({
+                'message': {
+                    'id': msg_id, 'content': content, 'file_url': file_url, 'file_type': file_type, 'file_name': file_name,
+                    'created_at': created_at.isoformat(),
+                    'user': {'id': user['id'], 'username': user['username'], 'display_name': user['display_name'], 'is_verified': user['is_verified'], 'avatar_url': user['avatar_url']}
+                }
+            })}
 
         return {'statusCode': 404, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Not found'})}
 
